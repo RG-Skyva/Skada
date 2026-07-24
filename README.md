@@ -3,9 +3,6 @@ Skada is a modular damage meter with various viewing modes, segmented fights and
 
 The project is based on Skada 1.8.87 by Kader Bouyakoub. 
 
-## Difference to v1.8.87
-see (https://github.com/RG-Skyva/Skada/blob/main/CHANGELOG.md)
-
 ## IMPORTANT: How to install
 
 1. If you used the default on **Skada** before, please make sure to delete all its files from `Interface\AddOns` folder as well as all its _SavedVariables_ from `WTF` folder (_just delete all `Skada.lua` and `Skada.lua.bak` for this folder. Use the search box for quick delete_). If you are new, skip this step.
@@ -18,7 +15,7 @@ see (https://github.com/RG-Skyva/Skada/blob/main/CHANGELOG.md)
 * Original author: **Zarnivoop**
 * New Version: **BKader** (https://github.com/bkader/Skada-WoTLK/blob/main/README.md)
 
-## Changelog
+## Difference to v1.8.87 / Changelog
 The changes listed below were made for the RG-Skyva version. The changes were primarily created using AI.
 
 ### Added
