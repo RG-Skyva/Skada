@@ -544,11 +544,6 @@ do
 		-- ICC: Valkyrs overkilling
 		[36609] = {
 			{
-				name = L["Useful Valkyrs"],
-				stop = 0.5,
-				diff = {["10h"] = true, ["25h"] = true}
-			},
-			{
 				name = L["Valkyrs overkilling"],
 				start = 0.5,
 				useful = true,

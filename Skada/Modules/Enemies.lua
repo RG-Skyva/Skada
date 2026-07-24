@@ -31,6 +31,9 @@ Skada:RegisterModule("Enemy Damage Taken", function(L, P, _, C)
 	local trash_n_boss = grouped_units.BOSS or grouped_units.TRASH -- Edit Skada\Core\Tables.lua
 
 	local totalset = L["Total"]
+	local valkyr_id = 36609
+	local useful_valkyrs = L["Useful Valkyrs"]
+	local overkill_valkyrs = L["Valkyrs overkilling"]
 	local instance_diff, instance_type
 	local max_health, max_power
 	local custom_units = {}
@@ -210,7 +213,7 @@ Skada:RegisterModule("Enemy Damage Taken", function(L, P, _, C)
 
 		e.damaged = (e.damaged or 0) + amount
 		e.totaldamaged = (e.totaldamaged or 0) + amount
-		if absorbed > 0 then
+		if absorbed ~= 0 then
 			e.totaldamaged = e.totaldamaged + absorbed
 		end
 
@@ -246,6 +249,13 @@ Skada:RegisterModule("Enemy Damage Taken", function(L, P, _, C)
 			source.total = source.total + amount + absorbed
 		elseif absorbed > 0 then
 			source.total = source.amount + absorbed
+		end
+	end
+
+	local function log_custom_range(set, name, playername, spellid, amount, absorbed)
+		log_custom_unit(set, name, playername, spellid, amount, absorbed)
+		if name == overkill_valkyrs then
+			log_custom_unit(set, useful_valkyrs, playername, spellid, -amount, -absorbed)
 		end
 	end
 
@@ -384,6 +394,14 @@ Skada:RegisterModule("Enemy Damage Taken", function(L, P, _, C)
 		-- this is temporarily disabled, only recorded to the current set.
 		if set.name == totalset then return end
 
+		-- Useful Valkyr damage is derived as all Valkyr damage minus damage below
+		-- 50%. This keeps both custom entries equal to the regular Valkyr total
+		-- even if maximum health cannot be resolved for an individual spawn.
+		local diff = get_instance_diff()
+		if GetCreatureId(actorid) == valkyr_id and (diff == "10h" or diff == "25h") then
+			log_custom_unit(set, useful_valkyrs, srcName, spellid, amount, absorbed)
+		end
+
 		-- custom units.
 		local units = get_custom_units(actorid, actorname, amount, overkill)
 		if not units then return end
@@ -400,7 +418,7 @@ Skada:RegisterModule("Enemy Damage Taken", function(L, P, _, C)
 					source.useful = (source.useful or 0) + amount
 				end
 				if unit.maxval == unit.full then
-					log_custom_unit(set, unit.name, srcName, spellid, amount, absorbed)
+					log_custom_range(set, unit.name, srcName, spellid, amount, absorbed)
 				end
 				unit.full = nil
 			elseif unit.curval >= unit.maxval then -- still above max value?
@@ -408,7 +426,7 @@ Skada:RegisterModule("Enemy Damage Taken", function(L, P, _, C)
 				unit.curval = unit.curval - amount
 
 				if unit.curval <= unit.maxval then
-					log_custom_unit(set, unit.name, srcName, spellid, unit.maxval - unit.curval, absorbed)
+					log_custom_range(set, unit.name, srcName, spellid, unit.maxval - unit.curval, absorbed)
 					amount = amount - (unit.maxval - unit.curval)
 					if grouped_units[unit.oname] and unit.useful then
 						log_custom_group(set, unit.oname, unit.guid, srcName, spellid, amount, overkill, absorbed)
@@ -433,14 +451,14 @@ Skada:RegisterModule("Enemy Damage Taken", function(L, P, _, C)
 
 				if unit.curval <= unit.minval then
 					local delta = unit.minval - unit.curval
-					log_custom_unit(set, unit.name, srcName, spellid, amount - delta, absorbed)
+					log_custom_range(set, unit.name, srcName, spellid, amount - delta, absorbed)
 					Skada:Debug(format("[%s] \124cffffbb00Stopped\124r", unit.name))
 					unit.done = true
 				else
-					log_custom_unit(set, unit.name, srcName, spellid, amount, absorbed)
+					log_custom_range(set, unit.name, srcName, spellid, amount, absorbed)
 				end
 			elseif unit.power then -- tracking power instead?
-				log_custom_unit(set, unit.name, srcName, spellid, amount - (unit.useful and overkill or 0), absorbed)
+				log_custom_range(set, unit.name, srcName, spellid, amount - (unit.useful and overkill or 0), absorbed)
 			end
 		end
 	end
