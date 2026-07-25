@@ -5,16 +5,19 @@ Skada:RegisterModule("Raid Fail Damage", function(L, P, _, _, M, O)
 	local mode_lady = Skada:NewModule("Lady Deathwhisper Ghost Damage")
 	local mode_lady_event = mode_lady:NewModule("Trigger List")
 	local mode_lady_event_target = mode_lady_event:NewModule("Target List")
+	local mode_lady_timeline = Skada:NewModule("Lady Deathwhisper Ghost Damage Timeline")
 	local mode_sindragosa_p2 = Skada:NewModule("Sindragosa P2 Backlash Damage")
 	local mode_sindragosa_p2_event = mode_sindragosa_p2:NewModule("Trigger List")
 	local mode_sindragosa_p2_event_target = mode_sindragosa_p2_event:NewModule("Target List")
 	local mode_sindragosa_all = Skada:NewModule("Sindragosa P1+P2 Backlash Damage")
 	local mode_sindragosa_all_event = mode_sindragosa_all:NewModule("Trigger List")
 	local mode_sindragosa_all_event_target = mode_sindragosa_all_event:NewModule("Target List")
+	local mode_sindragosa_all_timeline = Skada:NewModule("Sindragosa P1+P2 Backlash Damage Timeline")
 	local mode_council = Skada:NewModule("Blood Prince Council Knockbacks")
 	local mode_council_target = mode_council:NewModule("Target List")
 
 	local pairs, max, floor, date, format = pairs, math.max, math.floor, date, string.format
+	local tsort = table.sort
 	local wipe, GetTime = wipe, GetTime
 	local classfmt = Skada.classcolors.format
 	local GetCreatureId = Skada.GetCreatureId
@@ -48,7 +51,9 @@ Skada:RegisterModule("Raid Fail Damage", function(L, P, _, _, M, O)
 		mode = mode_lady,
 		eventmode = mode_lady_event,
 		eventtargetmode = mode_lady_event_target,
+		timelinemode = mode_lady_timeline,
 		name = "Lady Deathwhisper Ghost Damage",
+		timelinename = "Lady Deathwhisper Ghost Damage Timeline",
 		damage = "ladyghostdamage",
 		count = "ladyghosttriggers",
 		events = "ladyghostevents",
@@ -71,7 +76,9 @@ Skada:RegisterModule("Raid Fail Damage", function(L, P, _, _, M, O)
 		mode = mode_sindragosa_all,
 		eventmode = mode_sindragosa_all_event,
 		eventtargetmode = mode_sindragosa_all_event_target,
+		timelinemode = mode_sindragosa_all_timeline,
 		name = "Sindragosa P1+P2 Backlash Damage",
+		timelinename = "Sindragosa P1+P2 Backlash Damage Timeline",
 		damage = "sindragosaallbacklashdamage",
 		count = "sindragosaallbacklashtriggers",
 		events = "sindragosaallbacklashevents",
@@ -342,6 +349,7 @@ Skada:RegisterModule("Raid Fail Damage", function(L, P, _, _, M, O)
 		local mode = config.mode
 		local eventmode = config.eventmode
 		local eventtargetmode = config.eventtargetmode
+		local timelinemode = config.timelinemode
 
 		function eventmode:Enter(win, id, label, class)
 			win.actorid, win.actorname, win.actorclass = id, label, class
@@ -400,6 +408,60 @@ Skada:RegisterModule("Raid Fail Damage", function(L, P, _, _, M, O)
 			end
 		end
 
+		if timelinemode then
+		function timelinemode:Update(win, set)
+			win.title = L[config.timelinename]
+			if not set then return end
+
+			local timeline = {}
+			for actorName, actor in pairs(set.actors) do
+				local events = actor[config.events]
+				if events then
+					for eventIndex = 1, #events do
+						timeline[#timeline + 1] = {
+							name = actorName,
+							class = actor.class,
+							event = events[eventIndex],
+							index = eventIndex
+						}
+					end
+				end
+			end
+			if #timeline == 0 then return end
+
+			tsort(timeline, function(a, b)
+				local aevent, bevent = a.event, b.event
+				local atime = aevent.encountertime or aevent.timestamp or 0
+				local btime = bevent.encountertime or bevent.timestamp or 0
+				if atime == btime then
+					if a.name == b.name then return a.index < b.index end
+					return a.name < b.name
+				end
+				return atime < btime
+			end)
+
+			if win.metadata then win.metadata.maxvalue = 0 end
+			for index = 1, #timeline do
+				local entry = timeline[index]
+				local event = entry.event
+				local elapsed = event.encountertime
+				if elapsed == nil and event.timestamp and set.starttime then
+					elapsed = max(0, event.timestamp - set.starttime)
+				end
+
+				local d = win:nr(index)
+				d.id = index
+				d.label = format("[%s] %s", format_encounter_time(elapsed), classfmt(entry.class, entry.name))
+				d.value = event.damage or 0
+				format_value(d, set[config.damage] or 0, event.count or 0, config.timelinecols, win.metadata, true)
+			end
+		end
+
+		function timelinemode:GetSetSummary(set)
+			return set and set[config.damage]
+		end
+		end
+
 		function mode:Update(win, set)
 			win.title = L[config.name]
 			local totalDamage = set and set[config.damage] or 0
@@ -434,6 +496,14 @@ Skada:RegisterModule("Raid Fail Damage", function(L, P, _, _, M, O)
 		eventtargetmode.metadata = {showspots = true}
 		eventmode.metadata = {showspots = true, ordersort = true, click1 = eventtargetmode}
 		eventmode.nototal = true
+		if timelinemode then
+			timelinemode.metadata = {
+				ordersort = true,
+				columns = {Damage = true, Count = false, Percent = false, sPercent = false},
+				icon = [[Interface\ICONS\inv_misc_pocketwatch_01]]
+			}
+			config.timelinecols = timelinemode.metadata.columns
+		end
 		mode.metadata = {
 			showspots = true,
 			filterclass = true,
@@ -529,8 +599,10 @@ Skada:RegisterModule("Raid Fail Damage", function(L, P, _, _, M, O)
 		local lady_enabled = M.ladyenabled ~= false
 		if lady_enabled and not lady_mode_added then
 			Skada:AddMode(mode_lady, "Fails")
+			Skada:AddMode(mode_lady_timeline, "Fails")
 			lady_mode_added = true
 		elseif not lady_enabled and lady_mode_added then
+			Skada:RemoveMode(mode_lady_timeline)
 			Skada:RemoveMode(mode_lady)
 			lady_mode_added = false
 		end
@@ -539,8 +611,10 @@ Skada:RegisterModule("Raid Fail Damage", function(L, P, _, _, M, O)
 		if sindragosa_enabled and not sindragosa_modes_added then
 			Skada:AddMode(mode_sindragosa_all, "Fails")
 			Skada:AddMode(mode_sindragosa_p2, "Fails")
+			Skada:AddMode(mode_sindragosa_all_timeline, "Fails")
 			sindragosa_modes_added = true
 		elseif not sindragosa_enabled and sindragosa_modes_added then
+			Skada:RemoveMode(mode_sindragosa_all_timeline)
 			Skada:RemoveMode(mode_sindragosa_p2)
 			Skada:RemoveMode(mode_sindragosa_all)
 			sindragosa_modes_added = false
@@ -639,10 +713,14 @@ Skada:RegisterModule("Raid Fail Damage", function(L, P, _, _, M, O)
 		Skada.UnregisterAllMessages(self)
 		if council_mode_added then Skada:RemoveMode(mode_council) end
 		if sindragosa_modes_added then
+			Skada:RemoveMode(mode_sindragosa_all_timeline)
 			Skada:RemoveMode(mode_sindragosa_p2)
 			Skada:RemoveMode(mode_sindragosa_all)
 		end
-		if lady_mode_added then Skada:RemoveMode(mode_lady) end
+		if lady_mode_added then
+			Skada:RemoveMode(mode_lady_timeline)
+			Skada:RemoveMode(mode_lady)
+		end
 		council_mode_added = false
 		sindragosa_modes_added = false
 		lady_mode_added = false
