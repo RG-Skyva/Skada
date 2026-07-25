@@ -29,7 +29,12 @@ Skada:RegisterModule("Raid Fail Damage", function(L, P, _, _, M, O)
 	local SINDRAGOSA_HEALTH_INTERVAL = 0.25
 	local INSTABILITY_AURA = 69766
 	local lady_explosions = {[72011] = true, [72012] = true}
-	local sindragosa_explosions = {[71045] = true, [71046] = true}
+	local sindragosa_explosions = {
+		[69770] = true,
+		[71044] = true,
+		[71045] = true,
+		[71046] = true
+	}
 	local council_knockbacks = {[72815] = true, [72038] = true, [72816] = true, [72817] = true}
 
 	local lady_triggers = {}
@@ -69,7 +74,8 @@ Skada:RegisterModule("Raid Fail Damage", function(L, P, _, _, M, O)
 		damage = "sindragosabacklashdamage",
 		count = "sindragosabacklashtriggers",
 		events = "sindragosabacklashevents",
-		encountertime = true
+		encountertime = true,
+		include_trigger = true
 	}
 
 	local sindragosa_all = {
@@ -82,7 +88,8 @@ Skada:RegisterModule("Raid Fail Damage", function(L, P, _, _, M, O)
 		damage = "sindragosaallbacklashdamage",
 		count = "sindragosaallbacklashtriggers",
 		events = "sindragosaallbacklashevents",
-		encountertime = true
+		encountertime = true,
+		include_trigger = true
 	}
 
 	local function trigger_is_active(trigger, curtime)
