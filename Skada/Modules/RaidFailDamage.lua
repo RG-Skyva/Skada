@@ -52,7 +52,8 @@ Skada:RegisterModule("Raid Fail Damage", function(L, P, _, _, M, O)
 		damage = "ladyghostdamage",
 		count = "ladyghosttriggers",
 		events = "ladyghostevents",
-		encountertime = true
+		encountertime = true,
+		include_trigger = true
 	}
 
 	local sindragosa = {
@@ -158,8 +159,9 @@ Skada:RegisterModule("Raid Fail Damage", function(L, P, _, _, M, O)
 		return 0
 	end
 
-	local function is_other_player(trigger, t)
+	local function is_valid_explosion_target(trigger, t, include_trigger)
 		if not trigger or not t.dstName or not t:DestInGroup(true) then return false end
+		if include_trigger then return true end
 		if trigger.id and t.dstGUID then
 			return trigger.id ~= t.dstGUID
 		end
@@ -287,7 +289,7 @@ Skada:RegisterModule("Raid Fail Damage", function(L, P, _, _, M, O)
 		if not explosions[t.spellid] then return end
 
 		local trigger = find_trigger(triggers, latest, t.srcGUID, curtime)
-		if not is_other_player(trigger, t) then return end
+		if not is_valid_explosion_target(trigger, t, config.include_trigger) then return end
 
 		local amount = damage_amount(t)
 		if amount > 0 then
