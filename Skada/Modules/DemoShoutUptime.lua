@@ -251,17 +251,6 @@ Skada:RegisterModule("Demo Shout Uptime", function(L, P)
 		end
 	end
 
-	function mode:GetSetSummary(set)
-		local data = set and set.demoshoutuptime
-		if not data or not data.targets then return end
-
-		local total, curtime = 0, current_time()
-		for _, target in pairs(data.targets) do
-			total = total + get_uptime(target, curtime)
-		end
-		return total
-	end
-
 	function mode:SetComplete(set)
 		local data = set and set.demoshoutuptime
 		if not data or not data.targets then return end

@@ -6,6 +6,7 @@ Skada:RegisterModule("Raid Fail Damage", function(L, P, _, _, M, O)
 	local mode_lady_event = mode_lady:NewModule("Trigger List")
 	local mode_lady_event_target = mode_lady_event:NewModule("Target List")
 	local mode_lady_timeline = Skada:NewModule("Lady Deathwhisper Ghost Damage Timeline")
+	local mode_lady_timeline_target = mode_lady_timeline:NewModule("Target List")
 	local mode_sindragosa_p2 = Skada:NewModule("Sindragosa P2 Backlash Damage")
 	local mode_sindragosa_p2_event = mode_sindragosa_p2:NewModule("Trigger List")
 	local mode_sindragosa_p2_event_target = mode_sindragosa_p2_event:NewModule("Target List")
@@ -13,6 +14,7 @@ Skada:RegisterModule("Raid Fail Damage", function(L, P, _, _, M, O)
 	local mode_sindragosa_all_event = mode_sindragosa_all:NewModule("Trigger List")
 	local mode_sindragosa_all_event_target = mode_sindragosa_all_event:NewModule("Target List")
 	local mode_sindragosa_all_timeline = Skada:NewModule("Sindragosa P1+P2 Backlash Damage Timeline")
+	local mode_sindragosa_all_timeline_target = mode_sindragosa_all_timeline:NewModule("Target List")
 	local mode_council = Skada:NewModule("Blood Prince Council Knockbacks")
 	local mode_council_target = mode_council:NewModule("Target List")
 
@@ -57,6 +59,7 @@ Skada:RegisterModule("Raid Fail Damage", function(L, P, _, _, M, O)
 		eventmode = mode_lady_event,
 		eventtargetmode = mode_lady_event_target,
 		timelinemode = mode_lady_timeline,
+		timelinetargetmode = mode_lady_timeline_target,
 		name = "Lady Deathwhisper Ghost Damage",
 		timelinename = "Lady Deathwhisper Ghost Damage Timeline",
 		damage = "ladyghostdamage",
@@ -83,6 +86,7 @@ Skada:RegisterModule("Raid Fail Damage", function(L, P, _, _, M, O)
 		eventmode = mode_sindragosa_all_event,
 		eventtargetmode = mode_sindragosa_all_event_target,
 		timelinemode = mode_sindragosa_all_timeline,
+		timelinetargetmode = mode_sindragosa_all_timeline_target,
 		name = "Sindragosa P1+P2 Backlash Damage",
 		timelinename = "Sindragosa P1+P2 Backlash Damage Timeline",
 		damage = "sindragosaallbacklashdamage",
@@ -357,6 +361,7 @@ Skada:RegisterModule("Raid Fail Damage", function(L, P, _, _, M, O)
 		local eventmode = config.eventmode
 		local eventtargetmode = config.eventtargetmode
 		local timelinemode = config.timelinemode
+		local timelinetargetmode = config.timelinetargetmode
 
 		function eventmode:Enter(win, id, label, class)
 			win.actorid, win.actorname, win.actorclass = id, label, class
@@ -416,6 +421,37 @@ Skada:RegisterModule("Raid Fail Damage", function(L, P, _, _, M, O)
 		end
 
 		if timelinemode then
+		function timelinetargetmode:Enter(win, selection, label)
+			if type(selection) ~= "table" then return end
+			win.timelineactorid = selection.actorid
+			win.timelineactorname = selection.actorname
+			win.timelineactorclass = selection.actorclass
+			win.timelineeventindex = selection.eventindex
+			win.timelineeventname = label
+			win.title = label
+		end
+
+		function timelinetargetmode:Update(win, set)
+			win.title = win.timelineeventname or L["Target List"]
+			local actor = set and set:GetActor(win.timelineactorname, win.timelineactorid)
+			local events = actor and actor[config.events]
+			local event = events and events[win.timelineeventindex]
+			local targets = event and event.targets
+			local total = event and event.damage
+			if not targets or not total or total <= 0 then return end
+
+			if win.metadata then win.metadata.maxvalue = 0 end
+			local nr = 0
+			for targetName, target in pairs(targets) do
+				if target.amount and target.amount > 0 then
+					nr = nr + 1
+					local d = win:actor(nr, target, target.enemy, targetName)
+					d.value = target.amount
+					format_value(d, total, target.count, config.cols, win.metadata, true)
+				end
+			end
+		end
+
 		function timelinemode:Update(win, set)
 			win.title = L[config.timelinename]
 			if not set then return end
@@ -427,6 +463,7 @@ Skada:RegisterModule("Raid Fail Damage", function(L, P, _, _, M, O)
 					for eventIndex = 1, #events do
 						timeline[#timeline + 1] = {
 							name = actorName,
+							id = actor.id or actorName,
 							class = actor.class,
 							event = events[eventIndex],
 							index = eventIndex
@@ -441,10 +478,10 @@ Skada:RegisterModule("Raid Fail Damage", function(L, P, _, _, M, O)
 				local atime = aevent.encountertime or aevent.timestamp or 0
 				local btime = bevent.encountertime or bevent.timestamp or 0
 				if atime == btime then
-					if a.name == b.name then return a.index < b.index end
+					if a.name == b.name then return a.index > b.index end
 					return a.name < b.name
 				end
-				return atime < btime
+				return atime > btime
 			end)
 
 			if win.metadata then win.metadata.maxvalue = 0 end
@@ -456,9 +493,20 @@ Skada:RegisterModule("Raid Fail Damage", function(L, P, _, _, M, O)
 					elapsed = max(0, event.timestamp - set.starttime)
 				end
 
+				local targetCount = 0
+				for _ in pairs(event.targets or {}) do
+					targetCount = targetCount + 1
+				end
+
 				local d = win:nr(index)
-				d.id = index
-				d.label = format("[%s] %s", format_encounter_time(elapsed), classfmt(entry.class, entry.name))
+				d.id = {
+					actorid = entry.id,
+					actorname = entry.name,
+					actorclass = entry.class,
+					eventindex = entry.index
+				}
+				d.class = entry.class
+				d.label = format("[%s] %s (%d)", format_encounter_time(elapsed), classfmt(entry.class, entry.name), targetCount)
 				d.value = event.damage or 0
 				format_value(d, set[config.damage] or 0, event.count or 0, config.timelinecols, win.metadata, true)
 			end
@@ -504,8 +552,10 @@ Skada:RegisterModule("Raid Fail Damage", function(L, P, _, _, M, O)
 		eventmode.metadata = {showspots = true, ordersort = true, click1 = eventtargetmode}
 		eventmode.nototal = true
 		if timelinemode then
+			timelinetargetmode.metadata = {showspots = true}
 			timelinemode.metadata = {
 				ordersort = true,
+				click1 = timelinetargetmode,
 				columns = {Damage = true, Count = false, Percent = false, sPercent = false},
 				icon = [[Interface\ICONS\inv_misc_pocketwatch_01]]
 			}
