@@ -422,11 +422,11 @@ Skada:RegisterModule("Raid Fail Damage", function(L, P, _, _, M, O)
 
 		if timelinemode then
 		function timelinetargetmode:Enter(win, selection, label)
-			if type(selection) ~= "table" then return end
-			win.timelineactorid = selection.actorid
-			win.timelineactorname = selection.actorname
-			win.timelineactorclass = selection.actorclass
-			win.timelineeventindex = selection.eventindex
+			local entry = win.raidfailtimeline and win.raidfailtimeline[selection]
+			if not entry then return end
+			win.timelineactorid = entry.id
+			win.timelineactorname = entry.name
+			win.timelineeventindex = entry.index
 			win.timelineeventname = label
 			win.title = label
 		end
@@ -471,6 +471,7 @@ Skada:RegisterModule("Raid Fail Damage", function(L, P, _, _, M, O)
 					end
 				end
 			end
+			win.raidfailtimeline = timeline
 			if #timeline == 0 then return end
 
 			tsort(timeline, function(a, b)
@@ -499,15 +500,12 @@ Skada:RegisterModule("Raid Fail Damage", function(L, P, _, _, M, O)
 				end
 
 				local d = win:nr(index)
-				d.id = {
-					actorid = entry.id,
-					actorname = entry.name,
-					actorclass = entry.class,
-					eventindex = entry.index
-				}
+				d.id = index
 				d.class = entry.class
 				d.label = format("[%s] %s (%d)", format_encounter_time(elapsed), classfmt(entry.class, entry.name), targetCount)
+				d.reportlabel = format("[%s] %s (%d)", format_encounter_time(elapsed), entry.name, targetCount)
 				d.value = event.damage or 0
+				d.reportvalue = Skada:FormatNumber(d.value)
 				format_value(d, set[config.damage] or 0, event.count or 0, config.timelinecols, win.metadata, true)
 			end
 		end
@@ -555,6 +553,7 @@ Skada:RegisterModule("Raid Fail Damage", function(L, P, _, _, M, O)
 			timelinetargetmode.metadata = {showspots = true}
 			timelinemode.metadata = {
 				ordersort = true,
+				wipestale = true,
 				click1 = timelinetargetmode,
 				columns = {Damage = true, Count = false, Percent = false, sPercent = false},
 				icon = [[Interface\ICONS\inv_misc_pocketwatch_01]]
