@@ -25,12 +25,14 @@ Skada:RegisterModule("Raid Fail Damage", function(L, P, _, _, M, O)
 	local GetCreatureId = Skada.GetCreatureId
 
 	local TRIGGER_WINDOW = 3
+	local FROSTBOLT_VOLLEY_WINDOW = 1.5
 	local VENGEFUL_SHADE_ID = 38222
 	local SINDRAGOSA_ID = 36853
 	local SINDRAGOSA_P2_HEALTH = 35
 	local SINDRAGOSA_HEALTH_INTERVAL = 0.25
 	local INSTABILITY_AURA = 69766
 	local lady_explosions = {[72011] = true, [72012] = true}
+	local lady_frostbolt_volleys = {[72905] = true, [72906] = true, [72907] = true, [72908] = true}
 	local sindragosa_explosions = {
 		[69770] = true,
 		[71044] = true,
@@ -65,6 +67,7 @@ Skada:RegisterModule("Raid Fail Damage", function(L, P, _, _, M, O)
 		damage = "ladyghostdamage",
 		count = "ladyghosttriggers",
 		events = "ladyghostevents",
+		timelineevents = "ladyfrostboltvolleyevents",
 		encountertime = true,
 		include_trigger = true
 	}
@@ -175,6 +178,63 @@ Skada:RegisterModule("Raid Fail Damage", function(L, P, _, _, M, O)
 			return max(0, t.absorbed or t.amount or 0)
 		end
 		return 0
+	end
+
+	local function log_lady_frostbolt_volley(set, t, amount, curtime)
+		if set == Skada.total and not P.totalidc then return end
+
+		local events = set.ladyfrostboltvolleyevents
+		if not events then
+			events = {}
+			set.ladyfrostboltvolleyevents = events
+		end
+
+		local event = events[#events]
+		if not event or event.spellid ~= t.spellid or not event.lasttime or curtime - event.lasttime > FROSTBOLT_VOLLEY_WINDOW then
+			event = {
+				spellid = t.spellid,
+				spellname = t.spellname or GetSpellInfo(t.spellid) or tostring(t.spellid),
+				timestamp = time(),
+				encountertime = combat_start_time and max(0, curtime - combat_start_time) or nil,
+				lasttime = curtime,
+				damage = 0,
+				count = 0,
+				targets = {}
+			}
+			events[#events + 1] = event
+		else
+			event.lasttime = curtime
+		end
+
+		event.damage = event.damage + amount
+		event.count = event.count + 1
+
+		local target = event.targets[t.dstName]
+		if not target then
+			local targetActor = Skada:GetActor(set, t.dstName, t.dstGUID, t.dstFlags)
+			target = {
+				id = t.dstGUID or t.dstName,
+				class = targetActor and targetActor.class,
+				role = targetActor and targetActor.role,
+				spec = targetActor and targetActor.spec,
+				enemy = targetActor and targetActor.enemy,
+				amount = 0,
+				count = 0
+			}
+			event.targets[t.dstName] = target
+		end
+
+		target.amount = target.amount + amount
+		target.count = target.count + 1
+	end
+
+	local function handle_lady_frostbolt_volley(t, curtime)
+		if not lady_frostbolt_volleys[t.spellid] or not t.dstName or not t:DestInGroup(true) then return end
+
+		local amount = damage_amount(t)
+		if amount > 0 then
+			Skada:DispatchSets(log_lady_frostbolt_volley, t, amount, curtime)
+		end
 	end
 
 	local function is_valid_explosion_target(trigger, t, include_trigger)
@@ -330,6 +390,7 @@ Skada:RegisterModule("Raid Fail Damage", function(L, P, _, _, M, O)
 				handle_council_knockback(t)
 			end
 			if M.ladyenabled ~= false then
+				handle_lady_frostbolt_volley(t, curtime)
 				handle_explosion(t, lady_explosions, lady_triggers, latest_lady_trigger, lady, curtime)
 			end
 			if M.sindragosaenabled ~= false then
@@ -421,20 +482,35 @@ Skada:RegisterModule("Raid Fail Damage", function(L, P, _, _, M, O)
 		end
 
 		if timelinemode then
+		local function get_timeline_damage(set)
+			local total = set and set[config.damage] or 0
+			local events = set and config.timelineevents and set[config.timelineevents]
+			for index = 1, events and #events or 0 do
+				total = total + (events[index].damage or 0)
+			end
+			return total
+		end
+
 		function timelinetargetmode:Enter(win, selection, label)
 			local entry = win.raidfailtimeline and win.raidfailtimeline[selection]
 			if not entry then return end
 			win.timelineactorid = entry.id
 			win.timelineactorname = entry.name
 			win.timelineeventindex = entry.index
+			win.timelinesetevent = entry.setevent
 			win.timelineeventname = label
 			win.title = label
 		end
 
 		function timelinetargetmode:Update(win, set)
 			win.title = win.timelineeventname or L["Target List"]
-			local actor = set and set:GetActor(win.timelineactorname, win.timelineactorid)
-			local events = actor and actor[config.events]
+			local events
+			if win.timelinesetevent then
+				events = set and config.timelineevents and set[config.timelineevents]
+			else
+				local actor = set and set:GetActor(win.timelineactorname, win.timelineactorid)
+				events = actor and actor[config.events]
+			end
 			local event = events and events[win.timelineeventindex]
 			local targets = event and event.targets
 			local total = event and event.damage
@@ -471,6 +547,17 @@ Skada:RegisterModule("Raid Fail Damage", function(L, P, _, _, M, O)
 					end
 				end
 			end
+
+			local setevents = config.timelineevents and set[config.timelineevents]
+			for eventIndex = 1, setevents and #setevents or 0 do
+				local event = setevents[eventIndex]
+				timeline[#timeline + 1] = {
+					name = event.spellname or tostring(event.spellid),
+					event = event,
+					index = eventIndex,
+					setevent = true
+				}
+			end
 			win.raidfailtimeline = timeline
 			if #timeline == 0 then return end
 
@@ -486,6 +573,7 @@ Skada:RegisterModule("Raid Fail Damage", function(L, P, _, _, M, O)
 			end)
 
 			if win.metadata then win.metadata.maxvalue = 0 end
+			local totalDamage = get_timeline_damage(set)
 			for index = 1, #timeline do
 				local entry = timeline[index]
 				local event = entry.event
@@ -502,16 +590,16 @@ Skada:RegisterModule("Raid Fail Damage", function(L, P, _, _, M, O)
 				local d = win:nr(index)
 				d.id = index
 				d.class = entry.class
-				d.label = format("[%s] %s (%d)", format_encounter_time(elapsed), classfmt(entry.class, entry.name), targetCount)
+				d.label = format("[%s] %s (%d)", format_encounter_time(elapsed), entry.class and classfmt(entry.class, entry.name) or entry.name, targetCount)
 				d.reportlabel = format("[%s] %s (%d)", format_encounter_time(elapsed), entry.name, targetCount)
 				d.value = event.damage or 0
 				d.reportvalue = Skada:FormatNumber(d.value)
-				format_value(d, set[config.damage] or 0, event.count or 0, config.timelinecols, win.metadata, true)
+				format_value(d, totalDamage, event.count or 0, config.timelinecols, win.metadata, true)
 			end
 		end
 
 		function timelinemode:GetSetSummary(set)
-			return set and set[config.damage]
+			return get_timeline_damage(set)
 		end
 		end
 
