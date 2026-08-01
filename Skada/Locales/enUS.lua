@@ -546,6 +546,7 @@ L["[LookingForGroup]"] = "LookingForGroup"
 L["[Trade]"] = "Trade"
 L["Line"] = true
 L["Lines"] = true
+L["Start line"] = true
 L["There is nothing to report."] = true
 L["No mode or segment selected for report."] = true
 -- Bar Display Module --

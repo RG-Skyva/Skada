@@ -279,6 +279,7 @@ Skada:RegisterModule("Absorbs", function(L, P, G)
 	local shield_amounts = {} -- holds the amount shields absorbed so far
 	local shields_popped = nil -- holds the list of shields that popped on a player
 	local queued_amounts = nil -- amounts that went lost, added to next spell
+	local twin_essences = {} -- active Twin Val'kyr essence by destination GUID/name
 	local absorb = {}
 	local VALANYR_BLESSING = 64411
 	local VALANYR_REMOTE_DELAY = 0.2
@@ -593,6 +594,26 @@ Skada:RegisterModule("Absorbs", function(L, P, G)
 		return amount
 	end
 
+	local function handle_twin_essence(t)
+		local essence_ids = LIGHT_ESSENCES[t.spellid] and LIGHT_ESSENCES or DARK_ESSENCES[t.spellid] and DARK_ESSENCES
+		if not essence_ids then return end
+
+		local dstName = t.dstName and Skada:FixPetsName(t.dstGUID, t.dstName, t.dstFlags)
+		local function update(key)
+			if not key then return end
+			if t.event == "SPELL_AURA_REMOVED" then
+				if twin_essences[key] and essence_ids[twin_essences[key]] then
+					twin_essences[key] = nil
+				end
+			else
+				twin_essences[key] = t.spellid
+			end
+		end
+
+		update(t.dstGUID)
+		update(dstName)
+	end
+
 	local function process_absorb(dstName, t, broke)
 		shields_popped = clear(shields_popped) or {}
 
@@ -602,8 +623,14 @@ Skada:RegisterModule("Absorbs", function(L, P, G)
 		-- The Twin Val'kyr essences are encounter mechanics, not player-created
 		-- shields. Matching orbs, vortexes and surges absorbed by the active
 		-- essence must never be attributed to another regular absorb source.
-		if LIGHT_ESSENCE_DAMAGE[t.spellid] or DARK_ESSENCE_DAMAGE[t.spellid] then
+		local twin_damage = LIGHT_ESSENCE_DAMAGE[t.spellid] or DARK_ESSENCE_DAMAGE[t.spellid]
+		if twin_damage then
 			local essence_ids = LIGHT_ESSENCE_DAMAGE[t.spellid] and LIGHT_ESSENCES or DARK_ESSENCES
+			local active_essence = twin_essences[t.dstGUID] or twin_essences[dstName]
+
+			if active_essence and essence_ids[active_essence] then
+				return -- encounter absorb: intentionally ignored.
+			end
 
 			if essence_ids then
 				for essence_id in pairs(essence_ids) do
@@ -657,6 +684,10 @@ Skada:RegisterModule("Absorbs", function(L, P, G)
 
 		-- the player has no shields, so nothing to do.
 		if #shields_popped == 0 then
+			-- Never carry an unresolved Twin Val'kyr mechanic into a later
+			-- player-created shield. Known regular shields were handled above.
+			if twin_damage then return end
+
 			-- queued this lost amount for next spell (sadly!)
 			queue_amount(dstName, t.absorbed)
 			return
@@ -1094,6 +1125,7 @@ Skada:RegisterModule("Absorbs", function(L, P, G)
 					t.spellid = aura.id
 					t.spellstring = format("%s.%s", aura.id, ABSORB_SPELLS[aura.id].school)
 					t.__temp = true
+					handle_twin_essence(t)
 					handle_shield(t)
 					t = del(t)
 				end
@@ -1132,6 +1164,8 @@ Skada:RegisterModule("Absorbs", function(L, P, G)
 		clear(shields)
 		clear(shield_amounts)
 		clear(shields_popped)
+		clear(queued_amounts)
+		clear(twin_essences)
 		self.checked = nil
 	end
 
@@ -1159,6 +1193,14 @@ Skada:RegisterModule("Absorbs", function(L, P, G)
 		Skada:RegisterForCL(
 			handle_shield,
 			flags_src,
+			"SPELL_AURA_APPLIED",
+			"SPELL_AURA_REFRESH",
+			"SPELL_AURA_REMOVED"
+		)
+
+		Skada:RegisterForCL(
+			handle_twin_essence,
+			{dst_is_interesting = true},
 			"SPELL_AURA_APPLIED",
 			"SPELL_AURA_REFRESH",
 			"SPELL_AURA_REMOVED"

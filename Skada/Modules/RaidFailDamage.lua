@@ -27,7 +27,9 @@ Skada:RegisterModule("Raid Fail Damage", function(L, P, _, _, M, O)
 	local TRIGGER_WINDOW = 3
 	local FROSTBOLT_VOLLEY_WINDOW = 1.5
 	local VENGEFUL_SHADE_ID = 38222
+	local LADY_DEATHWHISPER_ID = 36855
 	local SINDRAGOSA_ID = 36853
+	local COUNCIL_IDS = {[37970] = true, [37972] = true, [37973] = true}
 	local SINDRAGOSA_P2_HEALTH = 35
 	local SINDRAGOSA_HEALTH_INTERVAL = 0.25
 	local INSTABILITY_AURA = 69766
@@ -98,6 +100,36 @@ Skada:RegisterModule("Raid Fail Damage", function(L, P, _, _, M, O)
 		encountertime = true,
 		include_trigger = true
 	}
+
+	local function encounter_mode_available(set, encounter_ids, ...)
+		if not set then return false end
+		if encounter_ids[set.gotboss] then return true end
+
+		for index = 1, select("#", ...) do
+			local key = select(index, ...)
+			if key and set[key] then return true end
+		end
+		return false
+	end
+
+	local lady_ids = {[LADY_DEATHWHISPER_ID] = true}
+	local sindragosa_ids = {[SINDRAGOSA_ID] = true}
+	local function lady_mode_available(_, set)
+		return encounter_mode_available(set, lady_ids, lady.damage, lady.count, lady.timelineevents)
+	end
+	local function sindragosa_mode_available(_, set)
+		return encounter_mode_available(set, sindragosa_ids, sindragosa.damage, sindragosa.count, sindragosa_all.damage, sindragosa_all.count)
+	end
+	local function council_mode_available(_, set)
+		return encounter_mode_available(set, COUNCIL_IDS, "councilknockbacks")
+	end
+
+	mode_lady.IsAvailable = lady_mode_available
+	mode_lady_timeline.IsAvailable = lady_mode_available
+	mode_sindragosa_p2.IsAvailable = sindragosa_mode_available
+	mode_sindragosa_all.IsAvailable = sindragosa_mode_available
+	mode_sindragosa_all_timeline.IsAvailable = sindragosa_mode_available
+	mode_council.IsAvailable = council_mode_available
 
 	local function trigger_is_active(trigger, curtime)
 		return trigger and trigger.expires and trigger.expires >= curtime
@@ -642,6 +674,7 @@ Skada:RegisterModule("Raid Fail Damage", function(L, P, _, _, M, O)
 			timelinemode.metadata = {
 				ordersort = true,
 				wipestale = true,
+				reportoffset = true,
 				click1 = timelinetargetmode,
 				columns = {Damage = true, Count = false, Percent = false, sPercent = false},
 				icon = [[Interface\ICONS\inv_misc_pocketwatch_01]]

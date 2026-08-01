@@ -621,11 +621,13 @@ function Window:UpdateDisplay()
 		end
 	elseif self.selectedset then
 		local set = self:GetSelectedSet()
+		local nr = 0
 
 		for i = 1, #modes do
 			local mode = modes[i]
-			if mode then
-				local d = self:nr(i)
+			if mode and Skada:IsModeAvailable(mode, set, self) then
+				nr = nr + 1
+				local d = self:nr(nr)
 
 				d.id = mode.moduleName
 				d.label = mode.localeName
@@ -739,6 +741,10 @@ end
 
 function Window:GetSelectedSet()
 	return Skada:GetSet(self.selectedset)
+end
+
+function Skada:IsModeAvailable(mode, set, win)
+	return not mode or not mode.IsAvailable or mode:IsAvailable(set, win) ~= false
 end
 
 function Window:SetSelectedSet(set, step)
@@ -1120,7 +1126,13 @@ function restore_view(self, set, mode)
 	self.changed = true
 
 	if mode then
-		self:DisplayMode(find_mode(mode) or self.selectedset)
+		local selectedmode = find_mode(mode)
+		local selectedset = self:GetSelectedSet()
+		if selectedmode and Skada:IsModeAvailable(selectedmode, selectedset, self) then
+			self:DisplayMode(selectedmode)
+		else
+			self:DisplayModes(self.selectedset)
+		end
 	else
 		self:DisplayModes(self.selectedset)
 	end

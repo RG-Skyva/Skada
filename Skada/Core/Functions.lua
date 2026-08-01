@@ -372,12 +372,13 @@ do
 	local tinsert = table.insert
 	local SpellLink = Private.SpellLink
 
-	local function BuildReportTable(mode, firstline, dataset, maxlines, fmt, barid)
+	local function BuildReportTable(mode, firstline, dataset, maxlines, fmt, barid, startline)
 		local temp = TempTable(EscapeStr(firstline))
 
 		local num = #dataset
+		startline = barid and 1 or math.max(1, tonumber(startline) or 1)
 		local nr, max_length = 0, 0
-		for i = 1, num do
+		for i = startline, num do
 			if nr >= maxlines then break end
 
 			local data = dataset[i]
@@ -398,10 +399,11 @@ do
 				if label then
 					label[#label + 1] = EscapeStr(data.reportvalue or data.valuetext)
 					if mode.metadata and mode.metadata.showspots then
+						local linenumber = startline > 1 and i or nr
 						if fmt and maxlines >= 10 and num >= 10 and not barid then
-							label[1] = format(nr >= 10 and "%s. %s" or " %s. %s", nr, label[1])
+							label[1] = format(linenumber >= 10 and "%s. %s" or " %s. %s", linenumber, label[1])
 						else
-							label[1] = format("%s. %s", nr, label[1])
+							label[1] = format("%s. %s", linenumber, label[1])
 						end
 					end
 				end
@@ -451,7 +453,7 @@ do
 	local GetChannelList = GetChannelList
 	local OpenExport = Private.ImportExport
 
-	function Skada:Report(channel, chantype, modename, setname, maxlines, window, barid)
+	function Skada:Report(channel, chantype, modename, setname, maxlines, window, barid, startline)
 		if maxlines == 0 then return end
 
 		if chantype == "channel" then
@@ -521,7 +523,7 @@ do
 		maxlines = maxlines or 10
 
 		local firstline = format(L["Skada: %s for %s:"], EscapeStr(title, true), label)
-		local temp = BuildReportTable(mode, firstline, dataset, maxlines, channel == "text", barid)
+		local temp = BuildReportTable(mode, firstline, dataset, maxlines, channel == "text", barid, startline)
 
 		if channel == "text" then
 			tinsert(temp, 2, "") -- extra line

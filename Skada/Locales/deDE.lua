@@ -488,6 +488,7 @@ L["[LookingForGroup]"] = "SucheNachGruppe"
 L["[Trade]"] = "Handel"
 L["Line"] = "Zeile"
 L["Lines"] = "Zeilen"
+L["Start line"] = "Startzeile"
 L["There is nothing to report."] = "Es gibt nichts zu berichten."
 L["No mode or segment selected for report."] = "Kein Modus oder Segment zum Berichten ausgew\195\164hlt."
 -- Bar Display Module --

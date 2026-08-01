@@ -24,6 +24,18 @@ Skada:RegisterModule("Fails", function(L, P, _, _, M, O)
 	local vezax_tracking_registered = false
 	local VEZAX_MARK_EFFECT = 63278
 	local VEZAX_MARK_AURA = 63276
+	local GENERAL_VEZAX_ID = 33271
+
+	local function vezax_mode_available(_, set)
+		return set and (
+			set.gotboss == GENERAL_VEZAX_ID or
+			(set.vezaxmarkhealing and set.vezaxmarkhealing > 0) or
+			(set.vezaxmarkticks and set.vezaxmarkticks > 0)
+		) or false
+	end
+
+	mode_vezax_healing.IsAvailable = vezax_mode_available
+	mode_vezax_ticks.IsAvailable = vezax_mode_available
 
 	local function format_valuetext(d, total, metadata, subview)
 		d.valuetext = Skada:FormatValueCols(

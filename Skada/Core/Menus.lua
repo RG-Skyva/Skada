@@ -903,13 +903,34 @@ do
 		menu:SetScript("OnShow", function(self)
 			self.opened = true
 			local mode = self.win and self.win.selectedmode
-			if not mode then return end
-			for btn, module in pairs(self.buttons) do
-				if module == mode then
-					btn:LockHighlight()
-				else
-					btn:UnlockHighlight()
+			local set = self.win and self.win:GetSelectedSet()
+			for _, header in pairs(self.headers) do
+				local previous, visible = nil, 0
+				for _, btn in pairs(header.buttons) do
+					local module = self.buttons[btn]
+					if Skada:IsModeAvailable(module, set, self.win) then
+						visible = visible + 1
+						btn:Show()
+						btn:ClearAllPoints()
+						if previous then
+							btn:SetPoint("TOPLEFT", previous, "BOTTOMLEFT")
+							btn:SetPoint("TOPRIGHT", previous, "BOTTOMRIGHT")
+						else
+							btn:SetPoint("TOPLEFT", header, "BOTTOMLEFT")
+							btn:SetPoint("TOPRIGHT", header, "TOPRIGHT")
+						end
+						previous = btn
+					else
+						btn:Hide()
+					end
+
+					if module == mode then
+						btn:LockHighlight()
+					else
+						btn:UnlockHighlight()
+					end
 				end
+				if visible > 0 then header:Show() else header:Hide() end
 			end
 		end)
 		menu:SetScript("OnHide", function(self)
@@ -998,25 +1019,28 @@ do
 			elseif level == 2 and categorized[UIDROPDOWNMENU_MENU_VALUE] then
 				for i = 1, #categorized[UIDROPDOWNMENU_MENU_VALUE] do
 					local mode = categorized[UIDROPDOWNMENU_MENU_VALUE][i]
-					wipe(info)
+					local set = self.win and self.win:GetSelectedSet()
+					if Skada:IsModeAvailable(mode, set, self.win) then
+						wipe(info)
 
-					if Skada.profile.moduleicons and mode.metadata and mode.metadata.icon then
-						info.text = format(iconName, mode.metadata.icon, mode.localeName)
-					else
-						info.text = mode.localeName
+						if Skada.profile.moduleicons and mode.metadata and mode.metadata.icon then
+							info.text = format(iconName, mode.metadata.icon, mode.localeName)
+						else
+							info.text = mode.localeName
+						end
+
+						info.func = function()
+							self.win:DisplayMode(mode)
+							CloseDropDownMenus()
+						end
+
+						if self.win and self.win.selectedmode and (self.win.selectedmode == mode or self.win.parentmode == mode) then
+							info.checked = 1
+							info.colorCode = "\124cffffd100"
+						end
+
+						UIDropDownMenu_AddButton(info, level)
 					end
-
-					info.func = function()
-						self.win:DisplayMode(mode)
-						CloseDropDownMenus()
-					end
-
-					if self.win and self.win.selectedmode and (self.win.selectedmode == mode or self.win.parentmode == mode) then
-						info.checked = 1
-						info.colorCode = "\124cffffd100"
-					end
-
-					UIDropDownMenu_AddButton(info, level)
 				end
 			end
 		end
@@ -1038,6 +1062,7 @@ do
 		local channel = Skada.profile.report.channel
 		local chantype = Skada.profile.report.chantype
 		local number = Skada.profile.report.number
+		local startline = window and window.metadata and window.metadata.reportoffset and Skada.profile.report.startline or 1
 
 		if channel == "whisper" then
 			channel = Skada.profile.report.target
@@ -1053,7 +1078,7 @@ do
 		end
 
 		if channel and chantype and mode and set and number then
-			Skada:Report(channel, chantype, mode, set, number, window, barid)
+			Skada:Report(channel, chantype, mode, set, number, window, barid, startline)
 
 			-- hide report window if shown.
 			if Skada.reportwindow and Skada.reportwindow:IsShown() then
@@ -1235,6 +1260,22 @@ do
 			end
 		end)
 		frame:AddChild(channelbox)
+
+		if window and window.metadata and window.metadata.reportoffset then
+			local maxline = math.max(1, #window.dataset)
+			local startvalue = math.min(maxline, math.max(1, Skada.profile.report.startline or 1))
+			Skada.profile.report.startline = startvalue
+
+			local startline = AceGUI:Create("Slider")
+			startline:SetLabel(L["Start line"])
+			startline:SetSliderValues(1, maxline, 1)
+			startline:SetValue(startvalue)
+			startline:SetCallback("OnValueChanged", function(self, event, value)
+				Skada.profile.report.startline = value
+			end)
+			startline:SetFullWidth(true)
+			frame:AddChild(startline)
+		end
 
 		local lines = AceGUI:Create("Slider")
 		lines:SetLabel(L["Lines"])
