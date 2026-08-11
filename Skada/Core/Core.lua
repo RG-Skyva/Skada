@@ -1857,7 +1857,9 @@ do
 	local version_count = 0
 
 	function check_version()
-		Skada:SendComm(nil, nil, "VersionCheck", Skada.version)
+		local version = Skada.version_num or convert_version(Skada.version)
+		Skada.version_num = version
+		Skada:SendComm(nil, nil, "VersionCheck", version)
 		if version_timer then
 			Skada:CancelTimer(version_timer, true)
 			version_timer = nil
@@ -1865,7 +1867,19 @@ do
 	end
 
 	function convert_version(ver)
-		return tonumber(type(ver) == "string" and gsub(ver, "%.", "", 2) or ver) or 0
+		if type(ver) ~= "string" then return tonumber(ver) or 0 end
+
+		local major, minor, patch, fork_major, fork_minor = strmatch(ver, "^(%d+)%.(%d+)%.(%d+)%+(%d+)%.(%d+)")
+		if not major then
+			major, minor, patch = strmatch(ver, "^(%d+)%.(%d+)%.(%d+)")
+			fork_major, fork_minor = 0, 0
+		end
+		if not major then return 0 end
+
+		-- Keep the original three-part version and the RG-Skyva suffix sortable.
+		-- Example: 1.8.87+1.2 is newer than both 1.8.87 and 1.8.87+1.1.
+		return tonumber(major) * 1e12 + tonumber(minor) * 1e9 + tonumber(patch) * 1e6 +
+			tonumber(fork_major) * 1e3 + tonumber(fork_minor)
 	end
 
 	function Skada:VersionCheck(sender, version)
@@ -1873,15 +1887,14 @@ do
 			version = convert_version(version)
 			local ver = self.version_num or convert_version(self.version)
 			self.version_num = ver
-			if not (version and ver) or self.versionChecked then
+			if version == 0 or ver == 0 then
 				return
-			elseif version > ver then
+			elseif version > ver and not self.versionChecked then
 				self:Printf(L["Skada is out of date. You can download the newest version from \124cffffbb00%s\124r"], self.website)
+				self.versionChecked = true
 			elseif version < ver then
-				self:SendComm("WHISPER", sender, "VersionCheck", self.version)
+				self:SendComm("WHISPER", sender, "VersionCheck", ver)
 			end
-
-			self.versionChecked = true
 		end
 	end
 
