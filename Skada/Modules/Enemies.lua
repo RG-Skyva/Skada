@@ -34,6 +34,8 @@ Skada:RegisterModule("Enemy Damage Taken", function(L, P, _, C)
 	local valkyr_id = 36609
 	local useful_valkyrs = L["Useful Valkyrs"]
 	local overkill_valkyrs = L["Valkyrs overkilling"]
+	local useful_princes = L["Princes useful"]
+	local overkill_princes = L["Princes overkilling"]
 	local instance_diff, instance_type
 	local max_health, max_power
 	local custom_units = {}
@@ -299,9 +301,15 @@ Skada:RegisterModule("Enemy Damage Taken", function(L, P, _, C)
 		-- Halion and Inferno are only considered for 25 heroic mode.
 		if group_name == L["Halion and Inferno"] and get_instance_diff() ~= "25h" then return end
 
-		-- log the damage as custom fake unit.
-		-- PS: we use "overkill" instead of "amount" for "Princes overkilling"
-		log_custom_unit(set, group_name, playername, spellid, group_name == L["Princes overkilling"] and overkill or amount, absorbed)
+		-- Council useful damage is derived from the same displayed values as the
+		-- existing overkill entry. Its absorbed part cancels out in the subtraction:
+		-- (amount + absorbed) - (overkill + absorbed) = amount - overkill.
+		if group_name == overkill_princes then
+			log_custom_unit(set, overkill_princes, playername, spellid, overkill, absorbed)
+			log_custom_unit(set, useful_princes, playername, spellid, max(0, amount - overkill), 0)
+		else
+			log_custom_unit(set, group_name, playername, spellid, amount, absorbed)
+		end
 	end
 
 	local dmg = {}

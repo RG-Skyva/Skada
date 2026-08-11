@@ -708,6 +708,7 @@ L["Friendly Fire"] = true
 L["Important targets"] = true
 L["Oozes"] = true
 L["Princes overkilling"] = true
+L["Princes useful"] = true
 L["Adds"] = true
 L["Halion and Inferno"] = true
 L["Valkyrs overkilling"] = true
